@@ -191,7 +191,7 @@ ld h(string vertex) {
 
 void aStar() {
 	cout << "A-STAR TIME START\n";
-	priority_queue<pair<ld,string>> pq;
+	priority_queue<pair<ld,string>, vector<pair<ld,string>>, greater<pair<ld,string>> > pq;
 	map<string,ld> fScore;
 	parent[A] = -1;
 	cost[A] = 0;
@@ -226,49 +226,60 @@ void aStar() {
 
 void aStarStops() {
 	cout << "A-STAR TIME START\n";
-	priority_queue< pair<pair<ld,int>,string>, vector<pair<pair<ld,int>,string>>, greater<pair<pair<ld,int>,string>> > pq;
+	priority_queue< pair<pair<ld,int>,pair<string,vector<int>>>, vector<pair<pair<ld,int>,pair<string,vector<int>>>>, greater<pair<pair<ld,int>,pair<string,vector<int>>>> > pq;
 
 	map<string,ld> fScore;
+	map<string,set<string>> arrivedUsing;
 	parent[A] = -1;
 	cost[A] = 0;
 
 	ld tmp = h(A);
 	fScore[A] = tmp;
-	pq.push({{tmp,T},A});
+	pq.push({{tmp,T},{A,vector<int>(0)}});
 
 	while (pq.size()) {
 		auto tmp = pq.top(); pq.pop();
 		int aktCost = tmp.first.first;
 		int aktTime = tmp.first.second;
-		string aktName = tmp.second;
-		// cout << "Maybe " << aktName << "\n";
+		string aktName = tmp.second.first;
+		vector<int> aktPath = tmp.second.second;
 		if (aktCost > fScore[aktName]) continue;
 		if (aktName == B) {
+			cout << aktCost << "\n";
+			for (auto it : aktPath) {
+				cout << input[it].line << " " << input[it].start << "->" << input[it].dest << ":\n";
+				for (auto it2 : arrivedUsing[input[it].start]) {
+					cout << it2 << " ";
+				}
+				cout << "\n";
+			}
 			generatePath();
 			return;
 		}
 		for (auto vertex : adj[aktName]) {
 			if (vertex.timeA < aktTime) continue;
-			
+			vector<int> herePath = aktPath;
 			int newCost = aktCost;
-			if (aktName != A) {
-				Edge prevConnection = input[parent[aktName]];
-				newCost += vertex.line != prevConnection.line;
+			if (arrivedUsing[aktName].find(vertex.line) == arrivedUsing[aktName].end()) {
+				if (aktName != A) {
+					newCost++;
+				}
+				herePath.pb(vertex.edgeId);
 			}
 
-			cout << "potential " << aktName << "->" << vertex.dest << "(" << vertex.line << "): " << newCost << "<" << cost[vertex.dest] << " " << aktTime << " " << vertex.timeB << "\n";
 			if (newCost < cost[vertex.dest]) {
-				// cout << aktName << "->" << vertex.dest << "(" << vertex.line << "): " << newCost << "<" << cost[vertex.dest] << " " << newCost + h(vertex.dest) << "\n";
 				parent[vertex.dest] = vertex.edgeId;
 				cost[vertex.dest] = newCost;
 				fScore[vertex.dest] = newCost + h(vertex.dest);
-				// cout << "DO KOLEJKI " << fScore[vertex.dest] << " " << vertex.dest << " " << vertex.timeB-T << "\n";
-				pq.push({{fScore[vertex.dest],vertex.timeB},vertex.dest});
+				pq.push({{fScore[vertex.dest],vertex.timeB},{vertex.dest,herePath}});
+			} 
+			if (newCost <= cost[vertex.dest]) {
+				arrivedUsing[vertex.dest].insert(vertex.line);
 			}
 		}
 
 	}
-}
+} // Dla każdego v vertor trzymający ścieżki do niego, bo z linii 270 ostra nierówność blokuje poprawną aktualizację
 
 void dijkstra() {
 	cout << "DIJKSTRA START\n";
