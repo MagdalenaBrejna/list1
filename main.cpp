@@ -32,6 +32,7 @@ string A, B;
 char MODE;
 int T;
 string Time;
+ld SLOWEST_PACE = INT_MAX;
 
 map<string,set<Edge>> adj;
 map<string,pair<ld, ld>> geo;
@@ -41,6 +42,14 @@ map<int,Edge> input;
 
 stringstream str;
 string::size_type sz;
+
+ld getDistance(ld Ax, ld Ay, ld Bx, ld By) {
+	// cout << Ax << " " << Ay << " " << Bx << " " << By << "\n";
+	return sqrt((Bx-Ax)*(Bx-Ax) + (By-Ay)*(By-Ay));
+}
+ld getPace(ld dist, ld time) {
+	return dist/time;
+}
 
 int getInt(string s) {
 	return (s[0]-'0')*10+s[1]-'0';
@@ -75,8 +84,8 @@ int getMyTime() {
 	return res;
 }
 
-int getMyLD() {
-	ld res = 0;
+ld getMyLD() {
+	ld res = .0;
 	string tmp;
 	getline(str,tmp,',');
 	res = getLD(tmp);
@@ -123,6 +132,8 @@ void read(string fname = "graph.csv") {
 		cost[stopA] = INF;
 		cost[stopB] = INF;
 		input[eId] = {linia, timeA, timeB, stopB, eId, stopA};
+		// cout << SLOWEST_PACE << " " << getDistance(Ax,Ay,Bx,By) << " " << getPace(getDistance(Ax,Ay,Bx,By), timeB-timeA) << "\n";
+		SLOWEST_PACE = min(SLOWEST_PACE, getPace(getDistance(Ax,Ay,Bx,By), timeB-timeA));
 	}
 }
 
@@ -136,27 +147,7 @@ string getTimeFromS(int S) {
 	return h+":"+m+":"+s;
 }
 
-void dijkstra() {
-	cout << "DIJKSTRA START\n";
-	cost[A] = 0;
-	parent[A] = -1;
-	priority_queue< pair<int,string>, vector<pair<int,string>>, greater<pair<int,string>> > pq;
-	pq.push({0,A});
-
-	while (pq.size()) {
-		pair<int,string> tmp = pq.top(); pq.pop();
-		int aktTime = tmp.first;
-		string aktName = tmp.second;
-		for (auto vertex : adj[aktName]) {
-			if (vertex.timeA < aktTime+T) continue;
-			int newTime = cost[aktName] + (vertex.timeB-T)-aktTime;
-			if (newTime < cost[vertex.dest]) {
-				parent[vertex.dest] = vertex.edgeId;
-				cost[vertex.dest] = newTime;
-				pq.push({newTime,vertex.dest});
-			}
-		}
-	}
+void generatePath() {
 	assert(cost[B] != INF);
 	string akt = B;
 	
@@ -189,13 +180,127 @@ void dijkstra() {
 	}
 }
 
+ld h(string vertex) {
+	if (MODE == 't') {
+		pair<ld,ld> WspA = geo[vertex], WspB = geo[B];
+		return getDistance(WspA.first,WspA.second,WspB.first,WspB.second)/SLOWEST_PACE;
+	} else {
+		return 0;
+	}
+}
+
+void aStar() {
+	cout << "A-STAR TIME START\n";
+	priority_queue<pair<ld,string>> pq;
+	map<string,ld> fScore;
+	parent[A] = -1;
+	cost[A] = 0;
+
+	ld tmp = h(A);
+	fScore[A] = tmp;
+	pq.push({tmp,A});
+
+	while (pq.size()) {
+		pair<int,string> tmp = pq.top(); pq.pop();
+		int aktTime = tmp.first;
+		string aktName = tmp.second;
+		if (aktTime > fScore[aktName]) continue;
+		if (aktName == B) {
+			generatePath();
+			return;
+		}
+		for (auto vertex : adj[aktName]) {
+			if (vertex.timeA < cost[aktName]+T) continue;
+			// cout << "hmm " << cost[aktName] << "+" << vertex.timeB << "-" << T << "-" << aktTime << "\n";
+			int newTime = (vertex.timeB-T);
+			if (newTime < cost[vertex.dest]) {
+				// cout << aktName << "->" << vertex.dest << ": " << newTime << "<" << cost[vertex.dest] << " " << newTime + h(vertex.dest) << "\n";
+				parent[vertex.dest] = vertex.edgeId;
+				cost[vertex.dest] = newTime;
+				fScore[vertex.dest] = newTime + h(vertex.dest);
+				pq.push({fScore[vertex.dest],vertex.dest});
+			}
+		}
+	}
+}
+
+void aStarStops() {
+	cout << "A-STAR TIME START\n";
+	priority_queue< pair<pair<ld,int>,string>, vector<pair<pair<ld,int>,string>>, greater<pair<pair<ld,int>,string>> > pq;
+
+	map<string,ld> fScore;
+	parent[A] = -1;
+	cost[A] = 0;
+
+	ld tmp = h(A);
+	fScore[A] = tmp;
+	pq.push({{tmp,T},A});
+
+	while (pq.size()) {
+		auto tmp = pq.top(); pq.pop();
+		int aktCost = tmp.first.first;
+		int aktTime = tmp.first.second;
+		string aktName = tmp.second;
+		// cout << "Maybe " << aktName << "\n";
+		if (aktCost > fScore[aktName]) continue;
+		if (aktName == B) {
+			generatePath();
+			return;
+		}
+		for (auto vertex : adj[aktName]) {
+			if (vertex.timeA < aktTime) continue;
+			
+			int newCost = aktCost;
+			if (aktName != A) {
+				Edge prevConnection = input[parent[aktName]];
+				newCost += vertex.line != prevConnection.line;
+			}
+
+			cout << "potential " << aktName << "->" << vertex.dest << "(" << vertex.line << "): " << newCost << "<" << cost[vertex.dest] << " " << aktTime << " " << vertex.timeB << "\n";
+			if (newCost < cost[vertex.dest]) {
+				// cout << aktName << "->" << vertex.dest << "(" << vertex.line << "): " << newCost << "<" << cost[vertex.dest] << " " << newCost + h(vertex.dest) << "\n";
+				parent[vertex.dest] = vertex.edgeId;
+				cost[vertex.dest] = newCost;
+				fScore[vertex.dest] = newCost + h(vertex.dest);
+				// cout << "DO KOLEJKI " << fScore[vertex.dest] << " " << vertex.dest << " " << vertex.timeB-T << "\n";
+				pq.push({{fScore[vertex.dest],vertex.timeB},vertex.dest});
+			}
+		}
+
+	}
+}
+
+void dijkstra() {
+	cout << "DIJKSTRA START\n";
+	cost[A] = 0;
+	parent[A] = -1;
+	priority_queue< pair<int,string>, vector<pair<int,string>>, greater<pair<int,string>> > pq;
+	pq.push({0,A});
+
+	while (pq.size()) {
+		pair<int,string> tmp = pq.top(); pq.pop();
+		int aktTime = tmp.first;
+		string aktName = tmp.second;
+		for (auto vertex : adj[aktName]) {
+			if (vertex.timeA < aktTime+T) continue;
+			int newTime = cost[aktName] + (vertex.timeB-T)-aktTime;
+			if (newTime < cost[vertex.dest]) {
+				parent[vertex.dest] = vertex.edgeId;
+				cost[vertex.dest] = newTime;
+				pq.push({newTime,vertex.dest});
+			}
+		}
+	}
+	generatePath();
+}
+
 int main() {
 	read();
 	cin >> A >> B >> MODE >> Time;
 	cout << A << " " << B << " " << MODE << " " << Time << "\n";
 	str = stringstream(Time);
 	T = getMyTime();
-	dijkstra();
-
+	// dijkstra();
+	aStarStops();
 	return 0;
 }
