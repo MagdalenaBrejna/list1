@@ -224,62 +224,101 @@ void aStar() {
 	}
 }
 
+map<string,map<string,set<int>>> dojazd;
+map<string,vector<int>> dojazdAll;
+
+void generatePathStops(string lineParameter, int timeParameter) {
+	cout << "Restoring path for " << lineParameter << "(" << cost[B] << "):\n";
+	string v = B, l = lineParameter;
+	int aktTime = timeParameter;
+	cout << l << "\n";
+	while (v != A) {
+		string tmpH = v;
+		for (auto i : dojazdAll[v]) {
+			Edge aktEdge = input[i];
+			string startV = aktEdge.start;
+			string potentialLine = aktEdge.line;
+			int potentialStartTime = aktEdge.timeA;
+			if (potentialStartTime > aktTime) continue;
+			if (potentialLine == l && cost[startV] == cost[v] && dojazd[startV][l].find(potentialStartTime) != dojazd[startV][l].end()) {
+				v = startV;
+				aktTime = potentialStartTime;
+				break;
+			}
+			else if (cost[startV]+1 == cost[v]) {
+				string betterLine;
+				int betterTime;
+				for (auto it : dojazd[startV]) {
+					if (it.second.size() == 0) continue;
+					betterTime = (*it.second.begin());
+					if (betterTime <= aktTime) {
+						betterLine = it.first;
+						break;
+					}
+				}
+				if (betterLine == l) continue;
+				v = startV;
+				aktTime = betterTime;
+				l = betterLine;
+				if (v != A)
+					cout << l << "\n";
+				break;
+			}
+		}
+		if (v == tmpH) break;
+	}
+}
+
 void aStarStops() {
 	cout << "A-STAR TIME START\n";
-	priority_queue< pair<pair<ld,int>,pair<string,vector<int>>>, vector<pair<pair<ld,int>,pair<string,vector<int>>>>, greater<pair<pair<ld,int>,pair<string,vector<int>>>> > pq;
+	priority_queue< pair<pair<ld,int>,pair<string,string>>, vector<pair<pair<ld,int>,pair<string,string>>>, greater<pair<pair<ld,int>,pair<string,string>>> > pq;
 
 	map<string,ld> fScore;
-	map<string,set<string>> arrivedUsing;
-	parent[A] = -1;
 	cost[A] = 0;
 
 	ld tmp = h(A);
 	fScore[A] = tmp;
-	pq.push({{tmp,T},{A,vector<int>(0)}});
+	pq.push({{tmp,T},{A,"Autobus Piekieł Bram"}});
 
 	while (pq.size()) {
 		auto tmp = pq.top(); pq.pop();
 		int aktCost = tmp.first.first;
 		int aktTime = tmp.first.second;
 		string aktName = tmp.second.first;
-		vector<int> aktPath = tmp.second.second;
+		string aktRandomLine = tmp.second.second;
 		if (aktCost > fScore[aktName]) continue;
 		if (aktName == B) {
-			cout << aktCost << "\n";
-			for (auto it : aktPath) {
-				cout << input[it].line << " " << input[it].start << "->" << input[it].dest << ":\n";
-				for (auto it2 : arrivedUsing[input[it].start]) {
-					cout << it2 << " ";
-				}
-				cout << "\n";
-			}
-			generatePath();
+			generatePathStops(aktRandomLine, aktTime);
 			return;
 		}
 		for (auto vertex : adj[aktName]) {
 			if (vertex.timeA < aktTime) continue;
-			vector<int> herePath = aktPath;
 			int newCost = aktCost;
-			if (arrivedUsing[aktName].find(vertex.line) == arrivedUsing[aktName].end()) {
-				if (aktName != A) {
-					newCost++;
-				}
-				herePath.pb(vertex.edgeId);
+			if (dojazd[aktName][vertex.line].find(vertex.timeA) == dojazd[aktName][vertex.line].end()){
+				newCost++;
 			}
 
+
+			if (newCost == cost[vertex.dest]) {
+				dojazd[vertex.dest][vertex.line].insert(vertex.timeB);
+				dojazdAll[vertex.dest].pb(vertex.edgeId);
+			}
 			if (newCost < cost[vertex.dest]) {
 				parent[vertex.dest] = vertex.edgeId;
 				cost[vertex.dest] = newCost;
 				fScore[vertex.dest] = newCost + h(vertex.dest);
-				pq.push({{fScore[vertex.dest],vertex.timeB},{vertex.dest,herePath}});
+				pq.push({{fScore[vertex.dest],vertex.timeB},{vertex.dest,vertex.line}});
+
+				dojazdAll[vertex.dest].clear();
+				dojazd[vertex.dest].clear();
+				dojazdAll[vertex.dest].pb(vertex.edgeId);
+				dojazd[vertex.dest][vertex.line].insert(vertex.timeB);
 			} 
-			if (newCost <= cost[vertex.dest]) {
-				arrivedUsing[vertex.dest].insert(vertex.line);
-			}
+			
 		}
 
 	}
-} // Dla każdego v vertor trzymający ścieżki do niego, bo z linii 270 ostra nierówność blokuje poprawną aktualizację
+}
 
 void dijkstra() {
 	cout << "DIJKSTRA START\n";
@@ -311,7 +350,6 @@ int main() {
 	cout << A << " " << B << " " << MODE << " " << Time << "\n";
 	str = stringstream(Time);
 	T = getMyTime();
-	// dijkstra();
 	aStarStops();
 	return 0;
 }
