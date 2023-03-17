@@ -27,28 +27,9 @@ struct Edge {
  	}
 };
 
-struct AStarElement {
-	int cost;
-	int time;
-	string name;
-	string line;
-	AStarElement(int C, int T, string N, string L) {
-		cost = C;
-		time = T;
-		name = N;
-		line = L;
-	}
-	AStarElement() {}
-	bool operator<(const AStarElement &o) const {
-		if (cost == o.cost && time == o.time) return name < o.name;
-		if (cost == o.cost) return time < o.time;
-		return cost < o.cost;
-	}
-};
-
 const int INF = INT_MAX-24*60*60;
 string A, B;
-string MODE;
+char MODE;
 int T;
 string Time;
 ld SLOWEST_PACE = INT_MAX;
@@ -166,39 +147,107 @@ string getTimeFromS(int S) {
 	return h+":"+m+":"+s;
 }
 
+void generatePath() {
+	assert(cost[B] != INF);
+	string akt = B;
+	
+	string prevLine = "";
+	string startName;
+	int startTime;
+	string prevName = "";
+	vector<Edge> output;
+	while (true) {
+		Edge here = input[parent[akt]];
+		if (here.line != prevLine) {
+			if (prevLine != "") {
+				Edge prevE = input[parent[prevName]];
+				output.pb({prevLine,prevE.timeA,startTime,startName,0,prevE.start});
+			}
+			prevLine = here.line;
+			startName = here.dest;
+			startTime = here.timeB;
+		}
+		if (parent[here.start] == -1) break;
+		prevName = akt;
+		akt = here.start;
+	}
+	Edge prevE = input[parent[akt]];
+	output.pb({prevLine,prevE.timeA,startTime,startName,0,prevE.start});
+	
+	reverse(output.begin(),output.end());
+	for (auto i : output) {
+		cout << i.line << ": (" << i.start << ", " << getTimeFromS(i.timeA) << ") -> (" << i.dest << ", " << getTimeFromS(i.timeB) << ")\n";
+	}
+}
+
+ld h(string vertex) {
+	if (MODE == 't') {
+		pair<ld,ld> WspA = geo[vertex], WspB = geo[B];
+		return getDistance(WspA.first,WspA.second,WspB.first,WspB.second)/SLOWEST_PACE;
+	} else {
+		return 0;
+	}
+}
+
+void aStar() {
+	cout << "A-STAR TIME START\n";
+	priority_queue<pair<ld,string>, vector<pair<ld,string>>, greater<pair<ld,string>> > pq;
+	map<string,ld> fScore;
+	parent[A] = -1;
+	cost[A] = 0;
+
+	ld tmp = h(A);
+	fScore[A] = tmp;
+	pq.push({tmp,A});
+
+	while (pq.size()) {
+		pair<int,string> tmp = pq.top(); pq.pop();
+		int aktTime = tmp.first;
+		string aktName = tmp.second;
+		if (aktTime > fScore[aktName]) continue;
+		if (aktName == B) {
+			generatePath();
+			return;
+		}
+		for (auto vertex : adj[aktName]) {
+			if (vertex.timeA < cost[aktName]+T) continue;
+			// cout << "hmm " << cost[aktName] << "+" << vertex.timeB << "-" << T << "-" << aktTime << "\n";
+			int newTime = (vertex.timeB-T);
+			if (newTime < cost[vertex.dest]) {
+				// cout << aktName << "->" << vertex.dest << ": " << newTime << "<" << cost[vertex.dest] << " " << newTime + h(vertex.dest) << "\n";
+				parent[vertex.dest] = vertex.edgeId;
+				cost[vertex.dest] = newTime;
+				fScore[vertex.dest] = newTime + h(vertex.dest);
+				pq.push({fScore[vertex.dest],vertex.dest});
+			}
+		}
+	}
+}
+
 map<string,map<string,set<int>>> dojazd;
-map<string,set<pair<int,int>,greater<pair<int,int>>>> dojazdAll;
-map<string,int> timePassed;
+map<string,vector<int>> dojazdAll;
 
 void generatePathStops(string lineParameter, int timeParameter) {
-	vector<Edge> output;
-	string prevLine = "";
-	string startName = B;
-	int startTime = timeParameter;
-	string prevName = "";
-
-	cout << "Restoring path for " << lineParameter << "(" << cost[B]-1 << ", " << getTimeFromS(timeParameter) << "):\n";
+	cout << "Restoring path for " << lineParameter << "(" << cost[B] << ", " << getTimeFromS(timeParameter) << "):\n";
 	string v = B, l = lineParameter;
 	int aktTime = timeParameter;
+	cout << l << "\n";
 	while (v != A) {
 		string tmpH = v;
-		// cout << v << " " << getTimeFromS(aktTime) << "\n";
 		for (auto i : dojazdAll[v]) {
-			Edge aktEdge = input[i.second];
+			Edge aktEdge = input[i];
 			string startV = aktEdge.start;
 			string potentialLine = aktEdge.line;
 			int potentialStartTime = aktEdge.timeA;
 			if (potentialStartTime > aktTime) continue;
-			// cout << "\t\tPOTENCJALNA " << getTimeFromS(potentialStartTime) << " " << getTimeFromS(aktTime) << "\n";
 			if (potentialLine == l && cost[startV] == cost[v] && dojazd[startV][l].find(potentialStartTime) != dojazd[startV][l].end()) {
-				// cout << "\tZMIANA " << getTimeFromS(potentialStartTime) << " " << getTimeFromS(aktTime) << "\n";
 				v = startV;
 				aktTime = potentialStartTime;
 				break;
 			}
-			else if (cost[startV]+1 == cost[v] && potentialLine == l) {
+			else if (cost[startV]+1 == cost[v]) {
 				string betterLine;
-				int betterTime=INT_MAX;
+				int betterTime;
 				for (auto it : dojazd[startV]) {
 					if (it.second.size() == 0) continue;
 					betterTime = (*it.second.begin());
@@ -208,87 +257,61 @@ void generatePathStops(string lineParameter, int timeParameter) {
 					}
 				}
 				if (betterLine == l) continue;
-
-				if (l != prevLine) {
-					output.pb({l,potentialStartTime,startTime,startName,0,startV});
-					prevLine = l;
-					startTime = (betterTime == INT_MAX ? aktTime : betterTime);
-					startName = startV;
-				}
-
 				v = startV;
 				aktTime = betterTime;
 				l = betterLine;
+				if (v != A)
+					cout << l << "\n";
 				break;
 			}
 		}
 		if (v == tmpH) break;
 	}
-
-	reverse(output.begin(),output.end());
-	for (auto i : output) {
-		cout << i.line << ": (" << i.start << ", " << getTimeFromS(i.timeA) << ") -> (" << i.dest << ", " << getTimeFromS(i.timeB) << ")\n";
-	}
 }
 
 void aStarStops() {
 	cout << "A-STAR TIME START\n";
-	set<AStarElement> s;
-	
+	priority_queue< pair<pair<ld,int>,pair<string,string>>, vector<pair<pair<ld,int>,pair<string,string>>>, greater<pair<pair<ld,int>,pair<string,string>>> > pq;
+
+	map<string,ld> fScore;
 	cost[A] = 0;
 
-	timePassed[A] = T;
-	s.insert({0,T,A,"Autobus Piekieł Bram"});
+	ld tmp = h(A);
+	fScore[A] = tmp;
+	pq.push({{tmp,T},{A,"Autobus Piekieł Bram"}});
 
-	while (s.size()) {
-		auto akt = *s.begin(); s.erase(s.begin());
-		// cout << "INSIDE " << akt.name << "\n";
-		
-		if (akt.name == B) {
-			generatePathStops(akt.line, akt.time);
+	while (pq.size()) {
+		auto tmp = pq.top(); pq.pop();
+		int aktCost = tmp.first.first;
+		int aktTime = tmp.first.second;
+		string aktName = tmp.second.first;
+		string aktRandomLine = tmp.second.second;
+		if (aktCost > fScore[aktName]) continue;
+		if (aktName == B) {
+			generatePathStops(aktRandomLine, aktTime);
 			return;
 		}
-		for (auto vertex : adj[akt.name]) {
-			// cout << "FROM " << akt.name << " CHECKING " << vertex.dest << "\n";
-			// cout << getTimeFromS(vertex.timeA) << " " << getTimeFromS(akt.time) << "\n";
-			if (vertex.timeA < akt.time) continue;
-			int newCost = akt.cost;
-			if (dojazd[akt.name][vertex.line].find(vertex.timeA) == dojazd[akt.name][vertex.line].end()){
+		for (auto vertex : adj[aktName]) {
+			if (vertex.timeA < aktTime) continue;
+			int newCost = aktCost;
+			if (dojazd[aktName][vertex.line].find(vertex.timeA) == dojazd[aktName][vertex.line].end()){
 				newCost++;
 			}
 
 
 			if (newCost == cost[vertex.dest]) {
 				dojazd[vertex.dest][vertex.line].insert(vertex.timeB);
-				dojazdAll[vertex.dest].insert({vertex.timeB,vertex.edgeId});
-
-				if (vertex.timeB < timePassed[vertex.dest]) {
-					AStarElement searcher = {cost[vertex.dest], timePassed[vertex.dest], vertex.dest, ""};
-					auto it = s.lower_bound(searcher);
-					if (it != s.end() and (*it).name == vertex.dest) {
-						s.erase(it);
-						s.insert({cost[vertex.dest],vertex.timeB,vertex.dest,vertex.line});
-						// cout << "INSERTED " << newCost << " " << getTimeFromS(vertex.timeB) << " " << vertex.dest << " " << vertex.line << "\n";
-						timePassed[vertex.dest] = vertex.timeB;
-					}
-				}
+				dojazdAll[vertex.dest].pb(vertex.edgeId);
 			}
 			if (newCost < cost[vertex.dest]) {
-				// cout << "FINDING NEXT " << akt.name << " -> " << vertex.dest << "\n";
-				AStarElement searcher = {cost[vertex.dest], timePassed[vertex.dest], vertex.dest, ""};
-				auto it = s.lower_bound(searcher);
-				if (it != s.end() and (*it).name == vertex.dest) {
-					s.erase(it);
-				}
-				s.insert({newCost,vertex.timeB,vertex.dest,vertex.line});
-				// cout << "INSERTED " << newCost << " " << getTimeFromS(vertex.timeB) << " " << vertex.dest << " " << vertex.line << "\n";
-
+				parent[vertex.dest] = vertex.edgeId;
 				cost[vertex.dest] = newCost;
-				timePassed[vertex.dest] = vertex.timeB;
+				fScore[vertex.dest] = newCost + h(vertex.dest);
+				pq.push({{fScore[vertex.dest],vertex.timeB},{vertex.dest,vertex.line}});
 
 				dojazdAll[vertex.dest].clear();
 				dojazd[vertex.dest].clear();
-				dojazdAll[vertex.dest].insert({vertex.timeB,vertex.edgeId});
+				dojazdAll[vertex.dest].pb(vertex.edgeId);
 				dojazd[vertex.dest][vertex.line].insert(vertex.timeB);
 			} 
 			
@@ -297,13 +320,33 @@ void aStarStops() {
 	}
 }
 
+void dijkstra() {
+	cout << "DIJKSTRA START\n";
+	cost[A] = 0;
+	parent[A] = -1;
+	priority_queue< pair<int,string>, vector<pair<int,string>>, greater<pair<int,string>> > pq;
+	pq.push({0,A});
+
+	while (pq.size()) {
+		pair<int,string> tmp = pq.top(); pq.pop();
+		int aktTime = tmp.first;
+		string aktName = tmp.second;
+		for (auto vertex : adj[aktName]) {
+			if (vertex.timeA < aktTime+T) continue;
+			int newTime = cost[aktName] + (vertex.timeB-T)-aktTime;
+			if (newTime < cost[vertex.dest]) {
+				parent[vertex.dest] = vertex.edgeId;
+				cost[vertex.dest] = newTime;
+				pq.push({newTime,vertex.dest});
+			}
+		}
+	}
+	generatePath();
+}
+
 int main() {
 	read();
-	getline(cin,A);
-	getline(cin,B);
-	getline(cin,MODE);
-	getline(cin,Time);
-	// cin >> A >> B >> MODE >> Time;
+	cin >> A >> B >> MODE >> Time;
 	cout << A << " " << B << " " << MODE << " " << Time << "\n";
 	str = stringstream(Time);
 	T = getMyTime();
