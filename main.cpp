@@ -4,8 +4,6 @@ using namespace std;
 using ld = long double;
 #define pb push_back
 
-typedef wchar_t ucs4_t;
-
 struct Edge {
 	string line;
 	int timeA;
@@ -51,28 +49,26 @@ string A, B;
 string MODE;
 int T;
 string Time;
-ld SLOWEST_PACE = INT_MAX;
+ld FASTEST_PACE = 0;
 
 map<string,set<Edge>> adj;
 map<string,pair<ld, ld>> geo;
 map<string,int> cost;
 map<string,int> parent;
 map<int,Edge> input;
+map<string,map<string,set<int>>> dojazd;
+map<string,set<pair<int,int>,greater<pair<int,int>>>> dojazdAll;
+map<string,int> timePassed;
 
 stringstream str;
-string::size_type sz;
 
 ld getDistance(ld Ax, ld Ay, ld Bx, ld By) {
-	// cout << Ax << " " << Ay << " " << Bx << " " << By << "\n";
 	return sqrt((Bx-Ax)*(Bx-Ax) + (By-Ay)*(By-Ay));
 }
 ld getPace(ld dist, ld time) {
 	return dist/time;
 }
 
-int getInt(string s) {
-	return (s[0]-'0')*10+s[1]-'0';
-}
 ld getLD(string s) {
 	ld res = 0, mult=1;
 	bool wasDot = false;
@@ -95,11 +91,11 @@ int getMyTime() {
 	int res = 0;
 	string tmp;
 	getline(str,tmp,':');
-	res += getInt(tmp)*60*60;
+	res += getLD(tmp)*60*60;
 	getline(str,tmp,':');
-	res += getInt(tmp)*60;
+	res += getLD(tmp)*60;
 	getline(str,tmp,',');
-	res += getInt(tmp);
+	res += getLD(tmp);
 	return res;
 }
 
@@ -112,8 +108,6 @@ ld getMyLD() {
 }
 
 void read(string fname = "graph.csv") {
-	//locale::global(locale("pl_PL.utf8"));
-	//cout.imbue(locale("pl_PL.utf8"));
 	ifstream file(fname);
 	if (!file.is_open()) {
 		cout << "error in reading file\n";
@@ -151,8 +145,7 @@ void read(string fname = "graph.csv") {
 		cost[stopA] = INF;
 		cost[stopB] = INF;
 		input[eId] = {linia, timeA, timeB, stopB, eId, stopA};
-		// cout << SLOWEST_PACE << " " << getDistance(Ax,Ay,Bx,By) << " " << getPace(getDistance(Ax,Ay,Bx,By), timeB-timeA) << "\n";
-		SLOWEST_PACE = min(SLOWEST_PACE, getPace(getDistance(Ax,Ay,Bx,By), timeB-timeA));
+		FASTEST_PACE = max(FASTEST_PACE, getPace(getDistance(Ax,Ay,Bx,By), timeB-timeA));
 	}
 }
 
@@ -166,10 +159,6 @@ string getTimeFromS(int S) {
 	return h+":"+m+":"+s;
 }
 
-map<string,map<string,set<int>>> dojazd;
-map<string,set<pair<int,int>,greater<pair<int,int>>>> dojazdAll;
-map<string,int> timePassed;
-
 void generatePathStops(string lineParameter, int timeParameter) {
 	vector<Edge> output;
 	string prevLine = "";
@@ -182,16 +171,13 @@ void generatePathStops(string lineParameter, int timeParameter) {
 	int aktTime = timeParameter;
 	while (v != A) {
 		string tmpH = v;
-		// cout << v << " " << getTimeFromS(aktTime) << "\n";
 		for (auto i : dojazdAll[v]) {
 			Edge aktEdge = input[i.second];
 			string startV = aktEdge.start;
 			string potentialLine = aktEdge.line;
 			int potentialStartTime = aktEdge.timeA;
 			if (potentialStartTime > aktTime) continue;
-			// cout << "\t\tPOTENCJALNA " << getTimeFromS(potentialStartTime) << " " << getTimeFromS(aktTime) << "\n";
 			if (potentialLine == l && cost[startV] == cost[v] && dojazd[startV][l].find(potentialStartTime) != dojazd[startV][l].end()) {
-				// cout << "\tZMIANA " << getTimeFromS(potentialStartTime) << " " << getTimeFromS(aktTime) << "\n";
 				v = startV;
 				aktTime = potentialStartTime;
 				break;
@@ -242,15 +228,12 @@ void aStarStops() {
 
 	while (s.size()) {
 		auto akt = *s.begin(); s.erase(s.begin());
-		// cout << "INSIDE " << akt.name << "\n";
 		
 		if (akt.name == B) {
 			generatePathStops(akt.line, akt.time);
 			return;
 		}
 		for (auto vertex : adj[akt.name]) {
-			// cout << "FROM " << akt.name << " CHECKING " << vertex.dest << "\n";
-			// cout << getTimeFromS(vertex.timeA) << " " << getTimeFromS(akt.time) << "\n";
 			if (vertex.timeA < akt.time) continue;
 			int newCost = akt.cost;
 			if (dojazd[akt.name][vertex.line].find(vertex.timeA) == dojazd[akt.name][vertex.line].end()){
@@ -268,20 +251,17 @@ void aStarStops() {
 					if (it != s.end() and (*it).name == vertex.dest) {
 						s.erase(it);
 						s.insert({cost[vertex.dest],vertex.timeB,vertex.dest,vertex.line});
-						// cout << "INSERTED " << newCost << " " << getTimeFromS(vertex.timeB) << " " << vertex.dest << " " << vertex.line << "\n";
 						timePassed[vertex.dest] = vertex.timeB;
 					}
 				}
 			}
 			if (newCost < cost[vertex.dest]) {
-				// cout << "FINDING NEXT " << akt.name << " -> " << vertex.dest << "\n";
 				AStarElement searcher = {cost[vertex.dest], timePassed[vertex.dest], vertex.dest, ""};
 				auto it = s.lower_bound(searcher);
 				if (it != s.end() and (*it).name == vertex.dest) {
 					s.erase(it);
 				}
 				s.insert({newCost,vertex.timeB,vertex.dest,vertex.line});
-				// cout << "INSERTED " << newCost << " " << getTimeFromS(vertex.timeB) << " " << vertex.dest << " " << vertex.line << "\n";
 
 				cost[vertex.dest] = newCost;
 				timePassed[vertex.dest] = vertex.timeB;
@@ -297,16 +277,87 @@ void aStarStops() {
 	}
 }
 
+void generatePathTime() {
+	assert(cost[B] != INF);
+	string akt = B;
+	
+	string prevLine = "";
+	string startName;
+	int startTime;
+	string prevName = "";
+	vector<Edge> output;
+	while (true) {
+		Edge here = input[parent[akt]];
+		if (here.line != prevLine) {
+			if (prevLine != "") {
+				Edge prevE = input[parent[prevName]];
+				output.pb({prevLine,prevE.timeA,startTime,startName,0,prevE.start});
+			}
+			prevLine = here.line;
+			startName = here.dest;
+			startTime = here.timeB;
+		}
+		if (parent[here.start] == -1) break;
+		prevName = akt;
+		akt = here.start;
+	}
+	Edge prevE = input[parent[akt]];
+	output.pb({prevLine,prevE.timeA,startTime,startName,0,prevE.start});
+	
+	reverse(output.begin(),output.end());
+	for (auto i : output) {
+		cout << i.line << ": (" << i.start << ", " << getTimeFromS(i.timeA) << ") -> (" << i.dest << ", " << getTimeFromS(i.timeB) << ")\n";
+	}
+}
+ld h(string vertex) {
+	pair<ld,ld> WspA = geo[vertex], WspB = geo[B];
+	return getDistance(WspA.first,WspA.second,WspB.first,WspB.second)/FASTEST_PACE;
+}
+void aStarTime() {
+	cout << "A-STAR START\n";
+	priority_queue< pair<ld,string>, vector<pair<ld,string>>, greater<pair<ld,string>> > pq;
+	map<string,ld> fScore;
+	parent[A] = -1;
+	cost[A] = 0;
+
+	ld tmp = h(A);
+	fScore[A] = tmp;
+	pq.push({tmp,A});
+
+	while (pq.size()) {
+		pair<int,string> tmp = pq.top(); pq.pop();
+		int aktTime = tmp.first;
+		string aktName = tmp.second;
+		if (aktTime > fScore[aktName]) continue;
+		if (aktName == B) {
+			generatePathTime();
+			return;
+		}
+		for (auto vertex : adj[aktName]) {
+			if (vertex.timeA < cost[aktName]+T) continue;
+			int newTime = (vertex.timeB-T);
+			if (newTime < cost[vertex.dest]) {
+				parent[vertex.dest] = vertex.edgeId;
+				cost[vertex.dest] = newTime;
+				fScore[vertex.dest] = newTime + h(vertex.dest);
+				pq.push({fScore[vertex.dest],vertex.dest});
+			}
+		}
+	}
+}
+
 int main() {
 	read();
 	getline(cin,A);
 	getline(cin,B);
 	getline(cin,MODE);
 	getline(cin,Time);
-	// cin >> A >> B >> MODE >> Time;
 	cout << A << " " << B << " " << MODE << " " << Time << "\n";
 	str = stringstream(Time);
 	T = getMyTime();
-	aStarStops();
+	if (MODE == "p") 
+		aStarStops();
+	else if (MODE == "t")
+		aStarTime();
 	return 0;
 }
