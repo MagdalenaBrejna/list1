@@ -29,31 +29,24 @@ struct Edge {
 
 const int INF = INT_MAX-24*60*60;
 string A, B;
-char MODE;
+string MODE;
 int T;
 string Time;
-ld SLOWEST_PACE = INT_MAX;
 
 map<string,set<Edge>> adj;
-map<string,pair<ld, ld>> geo;
 map<string,int> cost;
 map<string,int> parent;
 map<int,Edge> input;
 
 stringstream str;
-string::size_type sz;
 
 ld getDistance(ld Ax, ld Ay, ld Bx, ld By) {
-	// cout << Ax << " " << Ay << " " << Bx << " " << By << "\n";
 	return sqrt((Bx-Ax)*(Bx-Ax) + (By-Ay)*(By-Ay));
 }
 ld getPace(ld dist, ld time) {
 	return dist/time;
 }
 
-int getInt(string s) {
-	return (s[0]-'0')*10+s[1]-'0';
-}
 ld getLD(string s) {
 	ld res = 0, mult=1;
 	bool wasDot = false;
@@ -76,11 +69,11 @@ int getMyTime() {
 	int res = 0;
 	string tmp;
 	getline(str,tmp,':');
-	res += getInt(tmp)*60*60;
+	res += getLD(tmp)*60*60;
 	getline(str,tmp,':');
-	res += getInt(tmp)*60;
+	res += getLD(tmp)*60;
 	getline(str,tmp,',');
-	res += getInt(tmp);
+	res += getLD(tmp);
 	return res;
 }
 
@@ -93,8 +86,6 @@ ld getMyLD() {
 }
 
 void read(string fname = "graph.csv") {
-	//locale::global(locale("pl_PL.utf8"));
-	//cout.imbue(locale("pl_PL.utf8"));
 	ifstream file(fname);
 	if (!file.is_open()) {
 		cout << "error in reading file\n";
@@ -127,13 +118,9 @@ void read(string fname = "graph.csv") {
 		Bx = getMyLD();
 		By = getMyLD();
 		adj[stopA].insert({linia,timeA,timeB,stopB,eId});
-		geo[stopA] = {Ax,Ay};
-		geo[stopB] = {Bx,By};
 		cost[stopA] = INF;
 		cost[stopB] = INF;
 		input[eId] = {linia, timeA, timeB, stopB, eId, stopA};
-		// cout << SLOWEST_PACE << " " << getDistance(Ax,Ay,Bx,By) << " " << getPace(getDistance(Ax,Ay,Bx,By), timeB-timeA) << "\n";
-		SLOWEST_PACE = min(SLOWEST_PACE, getPace(getDistance(Ax,Ay,Bx,By), timeB-timeA));
 	}
 }
 
@@ -180,46 +167,6 @@ void generatePath() {
 	}
 }
 
-ld h(string vertex) {
-	pair<ld,ld> WspA = geo[vertex], WspB = geo[B];
-	return getDistance(WspA.first,WspA.second,WspB.first,WspB.second)/SLOWEST_PACE;
-}
-
-void aStar() {
-	cout << "A-STAR START\n";
-	priority_queue<pair<ld,string>> pq;
-	map<string,ld> fScore;
-	parent[A] = -1;
-	cost[A] = 0;
-
-	ld tmp = h(A);
-	fScore[A] = tmp;
-	pq.push({tmp,A});
-
-	while (pq.size()) {
-		pair<int,string> tmp = pq.top(); pq.pop();
-		int aktTime = tmp.first;
-		string aktName = tmp.second;
-		if (aktTime > fScore[aktName]) continue;
-		if (aktName == B) {
-			generatePath();
-			return;
-		}
-		for (auto vertex : adj[aktName]) {
-			if (vertex.timeA < cost[aktName]+T) continue;
-			// cout << "hmm " << cost[aktName] << "+" << vertex.timeB << "-" << T << "-" << aktTime << "\n";
-			int newTime = (vertex.timeB-T);
-			if (newTime < cost[vertex.dest]) {
-				// cout << aktName << "->" << vertex.dest << ": " << newTime << "<" << cost[vertex.dest] << " " << newTime + h(vertex.dest) << "\n";
-				parent[vertex.dest] = vertex.edgeId;
-				cost[vertex.dest] = newTime;
-				fScore[vertex.dest] = newTime + h(vertex.dest);
-				pq.push({fScore[vertex.dest],vertex.dest});
-			}
-		}
-	}
-}
-
 void dijkstra() {
 	cout << "DIJKSTRA START\n";
 	cost[A] = 0;
@@ -233,7 +180,7 @@ void dijkstra() {
 		string aktName = tmp.second;
 		for (auto vertex : adj[aktName]) {
 			if (vertex.timeA < aktTime+T) continue;
-			int newTime = cost[aktName] + (vertex.timeB-T)-aktTime;
+			int newTime = (vertex.timeB-T);
 			if (newTime < cost[vertex.dest]) {
 				parent[vertex.dest] = vertex.edgeId;
 				cost[vertex.dest] = newTime;
@@ -246,11 +193,13 @@ void dijkstra() {
 
 int main() {
 	read();
-	cin >> A >> B >> MODE >> Time;
+	getline(cin,A);
+	getline(cin,B);
+	getline(cin,MODE);
+	getline(cin,Time);
 	cout << A << " " << B << " " << MODE << " " << Time << "\n";
 	str = stringstream(Time);
 	T = getMyTime();
 	dijkstra();
-	// aStar();
 	return 0;
 }
